@@ -1,0 +1,229 @@
+---
+title: "HW3"
+author: "Juyoung Hahm"
+date: "10/10/2020"
+output: github_document
+---
+
+```{r include = FALSE}
+library(tidyverse)
+library(dplyr)
+library(p8105.datasets)
+library(hexbin)
+library(ggridges)
+
+
+knitr::opts_chunk$set(
+	fig.width = 6, 
+  fig.asp = .6,
+  out.width = "90%"
+)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+# Problem 1
+
+```{r}
+data("instacart")
+```
+
+This dataset contains `r nrow(instacart)` rows and ... columns. 
+
+Observations are the level of items in orders by user. There are user / order variables -- user ID, order ID, order day, and order hour. There are also item variables -- name, aisle, department, and some numeric codes. 
+
+How many aisles, and which are most items from?
+```{r}
+instacart %>% 
+	count(aisle) %>% 
+	arrange(desc(n))
+```
+
+Let's make a plot that shows the number of items ordered in each aisle, limiting this to aisles with more than 10000 items ordered
+```{r}
+instacart %>% 
+	count(aisle) %>% 
+	filter(n > 10000) %>% 
+	mutate(
+		aisle = factor(aisle),
+		aisle = fct_reorder(aisle, n)
+	) %>% 
+	ggplot(aes(x = aisle, y = n)) + 
+	geom_point() + 
+	theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+
+Let's make a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits”. Include the number of times each item is ordered in your table
+```{r}
+instacart %>% 
+	filter(aisle %in% c("baking ingredients", "dog food care", "packaged vegetables fruits")) %>% 
+	group_by(aisle) %>% 
+	count(product_name) %>% 
+	mutate(rank = min_rank(desc(n))) %>% 
+	filter(rank < 4) %>% 
+	arrange(aisle, rank) %>% 
+	knitr::kable()
+```
+
+
+Make a table showing the mean hour of the day at which Pink Lady Apples and Coffee Ice Cream are ordered on each day of the week
+```{r}
+instacart %>% 
+	filter(product_name %in% c("Pink Lady Apples", "Coffee Ice Cream")) %>% 
+	group_by(product_name, order_dow) %>% 
+	summarize(mean_hour = mean(order_hour_of_day)) %>% 
+	pivot_wider(
+		names_from = order_dow,
+		values_from = mean_hour
+	)
+```
+
+
+
+
+# Problem 2
+
+```{r}
+accel = read_csv("./accel_data.csv") %>%
+  janitor::clean_names()
+
+accel = accel %>%
+  mutate(
+    day = factor(day),
+    week = factor(week),
+    weekday_vs_weekend = ifelse(day %in% c("Saturday", "Sunday"), "W_end", "W_day"),
+    weekday_vs_weekend = factor(weekday_vs_weekend)
+  ) %>%
+  select(
+    week, day_id, day, weekday_vs_weekend, everything()
+  ) 
+
+```
+After organizing the data set `accel`, there are total of `r nrow(accel) * ncol(accel)` data and `r nrow(accel)` obsservations.  In order to distinguish the weekdays and weekends, `weekday_vs_weekend` was created. Since the variables `activity_1` through `activity_1440` are activity counts for each minute of a 24-hour day, it would be best to sum up them all and compare the total activity time. 
+
+
+Next, we establish the new variable `total activity` to aggregate across minutes for each day:
+```{r}
+accel %>%
+  mutate(activity_total = rowSums(accel[, 5:1444])) %>%
+	arrange(desc(activity_total)) %>%
+  select(
+    week, day_id, weekday_vs_weekend, activity_total
+  ) %>%
+
+  knitr::kable()
+```
+Using the table, we cannot clearly see the trend, so we are going to make a plot to see the evident trend.
+
+
+To see the trend of the `activity_total`, we are going to plot the 24-hour activity time courses for each day, separated by the day of the week:
+```{r warning = FALSE}
+accel %>%
+  mutate(activity_total = rowSums(accel[, 5:1444])) %>%
+  ggplot(aes(x = day_id, y = activity_total)) + 
+  geom_point(aes(color = day), size = 2) +
+  geom_smooth(se = FALSE) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  labs(y = "Activity Total(min)", x = "Day", title = "Five weeks of Acceleromete of 63 year-old male")
+```
+Using this plot, it shows that there is a non parametric smooth trend. Also, non parametric smooth trend provides a variation of different variables. 
+We can see Tuesday, Wednesday, Thursday has a steady trend, but other days, Friday, Saturday, Sunday, and Monday has a fluctuating trend. 
+
+
+# Problem 3
+```{r}
+library(p8105.datasets)
+data("ny_noaa")
+```
+
+Organize the data `ny_noaa`.
+```{r}
+ny_noaa = ny_noaa %>%
+  janitor::clean_names() %>%
+  separate(date, c("year", "month", "day"), sep = "-") %>%
+  mutate(
+    month = as.numeric(month),
+    tmax = as.numeric(as.character(tmax)),
+    tmin = as.numeric(as.character(tmin)),
+    prcp = as.numeric(prcp),
+    snow = as.numeric(snow),
+    snwd = as.numeric(snwd)
+         ) %>%
+  filter(prcp >= 0 | snow >= 0 | snwd >= 0 |  is.na(prcp) | is.na(snow) | is.na(snwd)
+         )
+ny_noaa = ny_noaa %>%
+  mutate(
+    tmax = tmax/10,
+    tmin = tmin/10,
+    prcp = prcp/10
+  )
+```
+Separate the `date` into `year`, `month`, and `day` for future coding.
+Let the units for `prcp`, `snow`, and `snwd` to be non-negative number because having a negative unit is impossible. 
+After changing the class type of `tmax`, `tmin`, and `prcp`, divide by 10 because these are measured in tenths.
+
+```{r}
+ny_noaa %>% 
+  select(year, month, snow) %>%
+	count(snow) %>% 
+  mutate(rank = min_rank(desc(n))) %>% 
+	filter(rank <= 4) %>%
+  knitr::kable()
+```
+We can see the most commonly observed values are: 0, NA, 31022, and 23095. There are almost 2 million zero millimeters of snowfall. One of the factors of this frequency is that the temperature of the Earth continues to rise, and therefore less snow is created. 
+
+To see this clear evidence, let's compare the average max temperature between January and July:
+```{r Jan vs July, warning=FALSE}
+month_df = tibble(month = 1:12, month_name = month.name)
+ny_noaa = left_join(ny_noaa, month_df, by = "month")
+ny_noaa = ny_noaa %>%
+  select(id, year, month_name, day, everything())
+
+ny_noaa_Jan_Jul = ny_noaa %>% 
+	filter(month_name %in% c("January", "July")) %>% 
+	group_by(month_name, id, year) %>% 
+	summarize(average_tmax = mean(tmax, na.rm = T))
+
+ggplot(ny_noaa_Jan_Jul, aes(x = year, y = average_tmax, group = id, color = id)) + 
+  geom_point(alpha = .5, show.legend = F) +
+  facet_grid(. ~ month_name) + 
+  labs(title = "Mean average temperature for January and July across stations and years",
+       x = "Year", y = "Average maximum temperature (C)") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+```
+We compared average max temperatures of January and July. Looking at the scatterplot, we can clearly see that the July average max temperatures are higher than the January. As time passes, the average max temperature of January is slowly getting higher, indicating the global warming is processing. We can determine some outliers, such as one point in July, where the temperature is about 15C. 
+
+
+To see the relationship between max and min temperature, we agre going to graph hex graph:
+```{r warning = "hide"}
+ny_noaa %>%
+  drop_na(tmax, tmin) %>%
+  ggplot(aes(x = tmax, y = tmin)) + 
+  geom_hex() +
+  labs(title = "Relationship between Max and Min temperature", 
+       x = "Max temperature (C)", y = "Min temperature (C)")
+```
+
+make a plot showing the distribution of snowfall values greater than 0 and less than 100 separately by year
+```{r}
+ny_noaa %>%
+  filter(snow >= 0 & snow <= 100) %>%
+  drop_na(snow) %>%
+  ggplot(aes(x = year, y = snow)) + 
+  geom_hex() +
+  labs(title = "Measurements of Snowfall", x = "Year", y = "Snowfall (mm)") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+
+```
+
+
+The size of this data, `ny_noaa` has `r nrow(ny_noaa)*ncol(ny_noaa)`. `ny_noaa` is a data set that for each Weather station ID, precipitation, snowfall, snow depth, maximum and minimum temperature was recorded everyday. Some of the key variables are `snow` and `tmin` because these variables are the indications that the Earth is getting warmer. We can notice that there are a lot of NAs and this could lead to an misleading conclusion. For example, the NAs in `tmax` and `tmin` contains more than half. So, we cannot accurately compare the average temperatures. 
+

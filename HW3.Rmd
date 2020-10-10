@@ -1,6 +1,0 @@
----
-title: "HW3"
-author: "Juyoung Hahm"
-date: "10/6/2020"
-output: html_document
----
